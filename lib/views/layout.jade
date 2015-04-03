@@ -1,0 +1,21 @@
+doctype html
+html(lang="en")
+  head
+    meta(charset="utf-8")
+    meta(http-equiv="X-UA-Compatible", content="IE=edge")
+    meta(name="viewport", content="width=device-width, initial-scale=1")
+    link(rel="stylesheet", href="//netdna.bootstrapcdn.com/bootstrap/3.1.1/css/bootstrap.min.css")
+  body
+    if typeof error != "undefined"
+      div.alert.alert-danger= error
+    if typeof info != "undefined"
+      div.alert.alert-info= info
+    .container-fluid.content-container
+      div(role="navigation").navbar.navbar-default#navigator
+        .container-fluid
+          a.navbar-brand(href="#") Canary Bot!
+          if typeof user != "undefined"
+      .container-fluid
+        div(style="display:none;").alert.alert-danger#error
+        block content
+    block scripts
