@@ -1,6 +1,10 @@
 "use strict";
-var socket = io();
 
+var getUserMedia = null;
+var RTCPeerConnection = null;
+var RTCSessionDescription = null;
+var RTCIceCandidate = null;
+var peer = null;
 
 var isChrome = !!navigator.webkitGetUserMedia;
 
@@ -10,87 +14,103 @@ var STUN = {
        : 'stun:23.21.150.121'
 };
 
-var TURN = {
-    url: 'turn:homeo@turn.bistri.com:80',
-    credential: 'homeo'
-};
-
 var iceServers = {
-   iceServers: [STUN, TURN]
+   iceServers: [STUN]
 };
 
+var socket = io();
 
-var button = document.getElementById('create-connection');
+socket.on("onWebRtcEvent", function(event){
+  console.log("got event " + event.type)
+  switch (event.type){
+    case "candidate" :
+      console.log("got candidate event");
+      peer.addIceCandidate(new RTCIceCandidate(event.candidate))
+      break;
+    case "sdp" : 
+      console.log("got sdp event")
+      peer.setRemoteDescription(new RTCSessionDescription(event.sdp))
+      peer.createAnswer(function(desc){
+        peer.setLocalDescription(desc);
+        socket.emit("webrtcEvent", {"type":"sdpRemote", "sdp": desc});
+      }, function() {
+        console.log("## Error with description ")
+      });
+      break;
+    case "sdpRemote" :
+      console.log("got remote event");
+      peer.setRemoteDescription( new RTCSessionDescription(event.sdp))
+      break;
+  }
+});
 
-socket.on("a test", function(msg){
-  console.log("got message: " + msg)
-})
-
-button.onclick = function(){
-  console.log("Clicked button")
+var createButton = document.getElementById('create-connection');
+createButton.onclick = startCall;
+setupConnection();
 
 
+function setupConnection() {
   var MediaConstraints = {
-      audio: true,
+      audio: false,
       video: true
   };
-  navigator.webkitGetUserMedia(MediaConstraints, OnMediaSuccess, OnMediaError);
+
+  var attachMediaStream = function(element, stream){
+    element.mozSrcObject = stream;
+    element.play();
+  }
+
+  if(navigator.mozGetUserMedia){
+    getUserMedia = navigator.mozGetUserMedia.bind(navigator);
+    RTCPeerConnection = mozRTCPeerConnection;
+    RTCSessionDescription = mozRTCSessionDescription;
+    RTCIceCandidate = mozRTCIceCandidate;
+  }else {
+    getUserMedia = navigator.webkitGetUserMedia.bind(navigator)
+  }
+  getUserMedia(MediaConstraints, OnMediaSuccess, OnMediaError);
 
   function OnMediaError(error) {
       console.error(error);
   }
 
-  function OnMediaSuccess(mediaStream) {
-    console.log('got media')
-    var selfView = document.getElementById('selfView');
-    //attachMediaStream(selfView, mediaStream)
-    selfView.src = URL.createObjectURL(mediaStream)
-    var peer = new webkitRTCPeerConnection(iceServers);
 
-    peer.onicecandidate = function(evt){
-      if(evt.candidate){
-        socket.emit('webrtc', JSON.stringify({'candidate':evt.candidate}))
-      }
-    };
+
+  function OnMediaSuccess(mediaStream) {
+    var selfView = document.getElementById('selfView');
+    attachMediaStream(selfView, mediaStream);
+    peer = new RTCPeerConnection(iceServers);
+    peer.addStream(mediaStream);
 
     peer.onnegotiationneeded = function(evt){
     }
     
-    peer.addStream(mediaStream);
-    
-    peer.onaddstream = function(mediaStream) {
-        video.src = webkitURL.createObjectURL(mediaStream);
+    peer.onaddstream = function(evt) {
+      console.log("stream added");
+      var remoteView = document.getElementById('remoteView')
+      attachMediaStream(remoteView, evt.stream);
+      //remoteView.src = URL.createObjectURL(evt.stream);
     };
 
     peer.onicecandidate = function(event) {
-        var candidate = event.candidate;
-        if(candidate) {
-            socket.send({
-                targetUser: 'target-user-id',
-                candidate: candidate
-            });
-        }
+      var candidate = event.candidate;
+      if(candidate) {
+          socket.emit("webrtcEvent", {
+            "type": "candidate",
+            candidate: candidate
+          });
+      }
     };
-    
-    // peer.createOffer(function(offerSDP) {
-    //     peer.setLocalDescription(offerSDP);
-    //     socket.send({
-    //         targetUser: 'target-user-id',
-    //         offerSDP: offerSDP
-    //     });
-    // }, onfailure, sdpConstraints);
   }
 }
 
+function startCall() {
+  peer.createOffer(function(desc){
+    console.log("creating offer with desc:" + desc)
+    peer.setLocalDescription(desc);
+    socket.emit("webrtcEvent", {"type":"sdp", "sdp":desc});
+  }, function(){
+    console.log("error creating offer")
+  });
+}
 
-
-
-
-
-var DtlsSrtpKeyAgreement = {
-   DtlsSrtpKeyAgreement: true
-};
-
-var optional = {
-   optional: [DtlsSrtpKeyAgreement]
-};
