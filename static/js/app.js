@@ -24,11 +24,9 @@ socket.on("onWebRtcEvent", function(event){
   console.log("got event " + event.type)
   switch (event.type){
     case "candidate" :
-      console.log("got candidate event");
       peer.addIceCandidate(new RTCIceCandidate(event.candidate))
       break;
     case "sdp" : 
-      console.log("got sdp event")
       peer.setRemoteDescription(new RTCSessionDescription(event.sdp))
       peer.createAnswer(function(desc){
         peer.setLocalDescription(desc);
@@ -38,15 +36,18 @@ socket.on("onWebRtcEvent", function(event){
       });
       break;
     case "sdpRemote" :
-      console.log("got remote event");
       peer.setRemoteDescription( new RTCSessionDescription(event.sdp))
       break;
   }
 });
 
+socket.on("fromMatrix", function(data){
+  console.log("got matrix event: " + JSON.stringify(data));
+})
+
 var createButton = document.getElementById('create-connection');
 createButton.onclick = startCall;
-setupConnection();
+//setupConnection();
 
 
 function setupConnection() {
@@ -106,7 +107,6 @@ function setupConnection() {
 
 function startCall() {
   peer.createOffer(function(desc){
-    console.log("creating offer with desc:" + desc)
     peer.setLocalDescription(desc);
     socket.emit("webrtcEvent", {"type":"sdp", "sdp":desc});
   }, function(){
